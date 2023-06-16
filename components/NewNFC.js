@@ -1,5 +1,12 @@
 import React, { useEffect, useState, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  RefreshControl,
+} from "react-native";
 import { Button } from "react-native-paper";
 import axios from "axios";
 import NfcManager, { NfcTech } from "react-native-nfc-manager";
@@ -14,6 +21,8 @@ function NewNFC(props) {
 
   const [balance, setBalance] = useState("");
   const [currency, setCurrency] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [token, setToken] = useState("");
 
   const instance = axios.create({
     baseURL: "https://easy-pay.onrender.com",
@@ -31,26 +40,30 @@ function NewNFC(props) {
     checkNfc();
   }, []);
 
-  useEffect(() => {
+  const fetchData = () => {
     instance
       .get("/nfc")
-      .then((response) => {
+      .then(async(response) => {
         console.log(response.data);
         setBalance(response.data.user.balance.amount);
         setCurrency(response.data.user.balance.currency.currencySymbol);
-        console.log(AsyncStorage.getItem("@token"));
+        console.log(await AsyncStorage.getItem("@token"));
       })
       .catch((error) => {
         console.log(error);
       });
+  };
+
+  useEffect(() => {
+    fetchData();
   }, []);
 
   async function readNdef() {
     try {
-        androidPromptRef.current.setVisible(true);
+      androidPromptRef.current.setVisible(true);
       await NfcManager.requestTechnology(NfcTech.Ndef);
       const tag = await NfcManager.getTag();
-      navigation.navigate("Tag", { tag,  });
+      navigation.navigate("Tag", { tag });
     } catch (ex) {
       //nothing
     } finally {
@@ -58,6 +71,21 @@ function NewNFC(props) {
       androidPromptRef.current.setVisible(false);
     }
   }
+
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.removeItem("@token");
+      navigation.navigate("Login", {token});
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchData();
+    setRefreshing(false);
+  };
 
   function renderNfcButtons() {
     if (hasNfc === null) {
@@ -101,7 +129,7 @@ function NewNFC(props) {
             readNdef();
           }}
         >
-          TAP/READ
+          GET MONEY
         </Button>
         <Button
           mode="contained"
@@ -110,7 +138,7 @@ function NewNFC(props) {
             navigation.navigate("Write");
           }}
         >
-          LINK/WRITE
+          TRANSFER MONEY
         </Button>
         <AndroidPrompt
           ref={androidPromptRef}
@@ -118,19 +146,30 @@ function NewNFC(props) {
             NfcManager.cancelTechnologyRequest();
           }}
         />
+        <Button mode="contained" style={[styles.logout]} onPress={handleLogout}>
+          Log Out
+        </Button>
       </View>
     );
   }
 
   return (
     <View style={styles.wrapper}>
-      <View style={styles.wrapper}>
-        <Text style={styles.bannerText}>Your Balance</Text>
-        <Text style={styles.amount}>
-          {currency}{balance.toLocaleString()}
-        </Text>
-        {renderNfcButtons()}
-      </View>
+      <ScrollView
+        contentContainerStyle={styles.scrollViewContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        <View style={styles.wrapper}>
+          <Text style={styles.bannerText}>Your Balance</Text>
+          <Text style={styles.amount}>
+            {currency}
+            {balance.toLocaleString()}
+          </Text>
+          {renderNfcButtons()}
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -154,9 +193,17 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     backgroundColor: "#1a667a",
   },
+  logout: {
+    backgroundColor: "#121f3e",
+  },
   amount: {
     fontSize: 38,
     color: "#121f3e",
+  },
+  scrollViewContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
 });
 

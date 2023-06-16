@@ -17,6 +17,7 @@ const Login = ({ navigation }) => {
   const [isCorrect, setIsCorrect] = useState(false);
   const [enteredEmail, setEnteredEmail] = useState("");
   const [enteredPassword, setEnteredPassword] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
   const instance = axios.create({
     baseURL: "https://easy-pay.onrender.com",
@@ -34,9 +35,9 @@ const Login = ({ navigation }) => {
     Keyboard.dismiss();
   };
 
-  const setToken = (token) => {
+  const setToken = async (token) => {
     try {
-      AsyncStorage.setItem("@token", token);
+      await AsyncStorage.setItem("@token", token);
     } catch (e) {
       console.log("did not work");
     }
@@ -54,18 +55,21 @@ const Login = ({ navigation }) => {
       .then(async (response) => {
         if (response.data.status === "success") {
           console.log(response.data);
-          console.log("here" + response.data.token);
-          setToken(response.data.token);
-
+          const token = response.data.token;
+          await setToken(token);
+		  axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
           setIsLoggedIn(true);
+          setEnteredEmail("");
+          setEnteredPassword("");
           navigation.navigate("nfc");
         }
       })
       .catch((error) => {
         setIsCorrect(true);
-        console.log("email or password inccorect");
+        console.log("email or password incorrect");
       });
   };
+
 
   return (
     <TouchableWithoutFeedback onPress={dismissKeyboard}>
@@ -82,12 +86,14 @@ const Login = ({ navigation }) => {
               style={styles.input}
               placeholder="Enter Your Email"
               onChangeText={handleEmailHandler}
+              value={enteredEmail}
             />
             <TextInput
               style={styles.input}
               placeholder="Enter Your Password"
               secureTextEntry={true}
               onChangeText={handlePasswordHandler}
+              value={enteredPassword}
             />
             <Button color="#1a667a" title="Sign In" onPress={submitHandler} />
           </View>
